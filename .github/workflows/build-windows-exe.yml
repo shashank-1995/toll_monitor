@@ -24,7 +24,7 @@ jobs:
 
       - name: Build EXE with PyInstaller
         run: |
-          pyinstaller --onefile src/main_edited.py --name toll_audit
+          pyinstaller --onefile main_edited.py --name toll_audit
 
       - name: Upload EXE as artifact
         uses: actions/upload-artifact@v4
