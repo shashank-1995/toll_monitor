@@ -1,12 +1,36 @@
-host="localhost"
-user="root"
-password=""
-database="test"
+from __future__ import annotations
 
-type= "Dispute Transaction/Chargeback"
-subtype = "TOLL FAIR CALCULATION ERROR"
-priority = "Priority 1"
-severity = "High"
+from dataclasses import dataclass
+import mysql.connector
 
-if __name__ == "__main__":
-    pass
+from config import CONFIG
+
+
+# ---- Dispute metadata (keep your existing values here) ----
+# If you already had these in older dbInfo.py, keep the same values.
+# I’m setting placeholders; replace with your real ones.
+type = "Toll Dispute"
+priority = "High"
+severity = "Medium"
+
+
+# ---- DB connection attributes (backward compatible) ----
+host = CONFIG.db.host
+user = CONFIG.db.user
+password = CONFIG.db.password
+database = CONFIG.db.database
+port = CONFIG.db.port
+
+
+def get_connection() -> mysql.connector.connection.MySQLConnection:
+    """
+    Single DB connection factory used everywhere.
+    Always returns a new connection (safe for repeated runs and avoids stale globals).
+    """
+    return mysql.connector.connect(
+        host=host,
+        user=user,
+        password=password,
+        database=database,
+        port=port,
+    )

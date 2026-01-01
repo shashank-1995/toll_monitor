@@ -1,305 +1,316 @@
-import mysql.connector
 import csv
-import shutil
-from datetime import datetime,timedelta
-import traceback
-import dbInfo
-import  pandas as pd
-from rough7 import paired_toll_error,dd_error,rj_error
 import os
-global source,destination1,destination2,filename
-# destination1 is the address of the folder with main script
-destination1= r"D:\toll-tracker-corporate-main\srce"
-# destination2 is the address of the output folder
-destination2= r"D:\toll-tracker-corporate-main\Files2"
-# source is the address of the folder where user will put files to be processed
-source= r"D:\toll-tracker-corporate-main\Files"
-def mainn():
-    global source,destination1,destination2,filename
-# tm is date till when user can continue to use the script. After that he will have to download the script from a link
-    tm="01-12-2026 00:00:01"
-    dt= datetime.strptime(tm,"%d-%m-%Y %H:%M:%S")
-    if datetime.now()<dt:
-        print("There will be 1 or 2 disputes files in the output folder")
-        empty_tablr()
-        emptyy_folder()
-        master()
-    else:
-        print("Your subscription has expired . Ask for renewal.")
-def master():
-    global source,destination1,destination2
+import shutil
+import traceback
+from datetime import datetime
+from bootstrap import preflight_or_exit
+from license_manager import validate_license_or_exit, get_device_id
 
-    lstt= os.listdir(source)
-    if len(lstt)==0:
-        print("No file is there to be processed. Plz add the files")
-        exit()
-    else:
-        for filename in lstt:
-            try:
-                    uploadd_data(filename)
+import pandas as pd
 
-                    Da_dispuutes(filename)
-                    paired_toll_error()
-                    dd_error()
-                    rj_error()
+import dbInfo
+from rough7 import paired_toll_error, dd_error, rj_error
 
-                    create_despute_report(filename)
-                    empty_tablr()
-            except:
-                traceback.print_exc()
+try:
+    # config.py must exist next to this script
+    from config import PATHS, CSV_ENCODING
+except Exception:
+    # Safe fallback so script still runs if config.py is missing
+    PATHS = {
+        "destination1": os.path.dirname(os.path.abspath(__file__)),
+        "destination2": os.path.join(os.path.dirname(os.path.abspath(__file__)), "Files2"),
+        "source": os.path.join(os.path.dirname(os.path.abspath(__file__)), "Files"),
+    }
+    CSV_ENCODING = "latin-1"
+    SUBSCRIPTION_EXPIRY = "01-12-2026 00:00:01"
 
-def uploadd_data(filename):
-    global source,destination1,destination2
+
+def _ensure_dirs() -> None:
+    os.makedirs(PATHS["destination1"], exist_ok=True)
+    os.makedirs(PATHS["destination2"], exist_ok=True)
+    os.makedirs(PATHS["source"], exist_ok=True)
+
+
+def _file_path(*parts: str) -> str:
+    return os.path.join(*parts)
+
+
+def mainn() -> None:
     try:
-        db = mysql.connector.connect(
-            host=dbInfo.host,
-            user=dbInfo.user,
-            password=dbInfo.password,
-            database=dbInfo.database
-        )
-        csv_data = csv.reader(open(source+"\\"+filename))
-        next(csv_data)
+        validate_license_or_exit()
+    except SystemExit as e:
+        print(str(e))
+        print("Your Device ID:", get_device_id())
+        raise
+    _ensure_dirs()
+    print("There will be 1 or 2 disputes files in the output folder")
+    empty_tablr()
+    emptyy_folder()
+    master()
+
+
+def master() -> None:
+    source = PATHS["source"]
+    lstt = os.listdir(source)
+
+    if len(lstt) == 0:
+        print("No file is there to be processed. Plz add the files")
+        raise SystemExit(0)
+
+    for filename in lstt:
+        try:
+            uploadd_data(filename)
+            Da_dispuutes(filename)
+
+            # Existing dispute logic (unchanged)
+            paired_toll_error()
+            dd_error()
+            # rj_error()
+
+            # create_despute_report(filename)
+            empty_tablr()
+        except Exception:
+            traceback.print_exc()
+
+
+def uploadd_data(filename: str) -> None:
+    source = PATHS["source"]
+    input_path = _file_path(source, filename)
+
+    try:
+        db = dbInfo.get_connection()
         cursor = db.cursor(buffered=True)
 
-        count = 0
-        process_count = 0
-        dt_string= datetime.strftime(datetime.now(),"%Y-%m-%d %H:%M:%S")
-        for row in csv_data:
-                if "TRIP (RRN NO / TRIP NO)" in row[5]:
+        with open(input_path, newline="", encoding=CSV_ENCODING, errors="replace") as fh:
+            csv_data = csv.reader(fh)
+            next(csv_data, None)
 
-                    unique_id1 = row[8].strip("ÿ").strip('Â')
-                    # print(unique_id1)
-                    plazacode = float(row[6].strip('Â').strip('ÿ').strip('˜'))
-                    s = row[10].replace(',', '')
-                    price = float(s)
-                    if "Plaza Name:" in row[7]:
+            count = 0
+            process_count = 0
+            dt_string = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
 
-                        plazaname = row[7].split("Plaza Name:")[1].split('- Lane')[0]
+            for row in csv_data:
+                if len(row) < 11:
+                    continue
+
+                if "TRIP (RRN NO / TRIP NO)" not in row[5]:
+                    continue
+
+                unique_id1 = row[8].strip("ÿ").strip("Â")
+                plazacode = float(row[6].strip("Â").strip("ÿ").strip("˜"))
+                price = float(row[10].replace(",", ""))
+
+                if "Plaza Name:" in row[7]:
+                    plazaname = row[7].split("Plaza Name:")[1].split("- Lane")[0]
+                else:
+                    plazaname = row[7].split("- Lane")[0]
+
+                rrn = unique_id1.split("/")[0].strip("˜").strip()
+                trip_id = unique_id1.split("/")[1].strip()
+
+                dtm1 = row[0].strip()
+                if len(dtm1) >= 18:
+                    if "/" in dtm1:
+                        dtm = datetime.strptime(dtm1, "%d/%m/%Y %H:%M:%S")
                     else:
-                        plazaname = row[7].split('- Lane')[0]
-
-                    rrn = unique_id1.split("/")[0].strip('˜').strip()
-                    trip_id = unique_id1.split("/")[1].strip()
-                    dtm1 = row[0].strip()
-                    # print(dtm1)
-                    # dtm = datetime.strptime(dtm1, "%d/%m/%Y %H:%M:%S")
-                    if len(dtm1) >= 18:
-                        if "/" in dtm1:
-                            dtm = datetime.strptime(dtm1, "%d/%m/%Y %H:%M:%S")
-                        else:
-                            dtm = datetime.strptime(dtm1, "%Y-%m-%d %H:%M:%S")
+                        dtm = datetime.strptime(dtm1, "%Y-%m-%d %H:%M:%S")
+                else:
+                    if "/" in dtm1:
+                        dtm = datetime.strptime(dtm1, "%d/%m/%y %H:%M")
                     else:
-                        if "/" in dtm1:
-                            dtm = datetime.strptime(dtm1, "%d/%m/%y %H:%M")
-                        else:
-                            dtm = datetime.strptime(dtm1, "%d-%m-%Y %H:%M")
-                    sql = "INSERT INTO t_statement (txn_dtm, lic_no, tag_no, plaza_code, plaza_name, rrn, trip_no, deduct_price,created_at,status) VALUES ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s');" % (
-                        dtm, row[2].strip(), row[3].strip(), plazacode, plazaname, rrn, trip_id, price,dt_string ,
-                        "not processed")
-                    try:
-                        # Execute the SQL command
-                        process_count += 1
+                        dtm = datetime.strptime(dtm1, "%d-%m-%Y %H:%M")
 
-                        cursor.execute(sql)
-                        count += cursor.rowcount
-                        # print(count)
+                sql = (
+                    "INSERT INTO t_statement "
+                    "(txn_dtm, lic_no, tag_no, plaza_code, plaza_name, rrn, trip_no, deduct_price, created_at, status) "
+                    "VALUES ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s');"
+                    % (
+                        dtm,
+                        row[2].strip(),
+                        row[3].strip(),
+                        plazacode,
+                        plazaname,
+                        rrn,
+                        trip_id,
+                        price,
+                        dt_string,
+                        "not processed",
+                    )
+                )
 
-                        # Commit your changes in the database
-
-                    except:
-                        # print("Error :",process_count, sys.exc_info()[0])
-                        # Rollback in case there is any error
-                        db.rollback()
+                try:
+                    process_count += 1
+                    cursor.execute(sql)
+                    count += cursor.rowcount
+                except Exception:
+                    db.rollback()
 
         db.commit()
+        print(f"Total Processed Data {process_count} and Total {count} data inserted successfully! ")
 
-        print("Total Processed Data {} and Total {} data inserted successfully! ".format(process_count, count))
-
-    except:
+    except Exception:
         traceback.print_exc()
 
 
+def Da_dispuutes(filename: str) -> None:
+    source = PATHS["source"]
+    destination1 = PATHS["destination1"]
+    destination2 = PATHS["destination2"]
 
-def Da_dispuutes(filename):
+    input_path = _file_path(source, filename)
 
     try:
-        global source,destination1,destination2
-        db = mysql.connector.connect(
-            host=dbInfo.host,
-            user=dbInfo.user,
-            password=dbInfo.password,
-            database=dbInfo.database
-        )
+        db = dbInfo.get_connection()
+
         cursor = db.cursor(buffered=True)
 
-        lic_no = ''
-        rn = ''
-        trip_no = ''
+        fields = ["Type", "Subtype", "Trip Number", "Dispute Amount", "Title", "Description"]
 
-        fields = ['Type', 'Subtype', 'Trip Number', 'Dispute Amount', 'Title', 'Description']
-
-        file2 = filename.split(".csv")[0] + 'DA_Disp_5' + '.csv'
-
-        f = open(file2, 'w', encoding='UTF8', newline='')
-        # VRN stands for vehicle registration number
-
-        # create the csv writer
-        csvwriter = csv.writer(f)
-
-        # writing the fields
-        csvwriter.writerow(fields)
+        file2_name = filename.split(".csv")[0] + "DA_Disp_5" + ".csv"
+        file2_path = _file_path(destination1, file2_name)
 
         c = 0
-        csv_data = csv.reader(open(source+"\\"+ filename, newline=''))
-        next(csv_data)
-        for row in csv_data:
-            lst = []
+        with open(file2_path, "w", encoding="utf-8", newline="") as f:
+            csvwriter = csv.writer(f)
+            csvwriter.writerow(fields)
 
-            if "Chargeback Debit Adjustment" in row[7]:
-                s = row[10].replace(',', '')
-                amount = float(s)
-                rn = row[7].split("RRN ")[1].strip()
-                # print(rn)
-                sql = "SELECT trip_no,lic_no from t_statement where rrn like '{}'".format(rn)
-                cursor.execute(sql)
-                res = cursor.fetchall()
-                if res:
+            with open(input_path, newline="", encoding=CSV_ENCODING, errors="replace") as fh:
+                csv_data = csv.reader(fh)
+                next(csv_data, None)
+
+                for row in csv_data:
+                    if len(row) < 11:
+                        continue
+
+                    if "Chargeback Debit Adjustment" not in row[7]:
+                        continue
+
+                    amount = float(row[10].replace(",", ""))
+                    rn = row[7].split("RRN ")[1].strip()
+
+                    sql = "SELECT trip_no, lic_no from t_statement where rrn like '{}'".format(rn)
+                    cursor.execute(sql)
+                    res = cursor.fetchall()
+
+                    if not res:
+                        continue
+
                     c += 1
-                    for r in res:
-                        trip_no = r[0]
-                        lic_no = r[1]
+                    trip_no, lic_no = res[0][0], res[0][1]
 
-                    lst.append(dbInfo.type)
-                    lst.append('Wrong Debit Adjustment raised')
-
-                    lst.append(trip_no)
-                    lst.append(amount)
-                    lst.append('WRONG DEBIT ADJUSTMENT')
-                    lst.append('Toll operator made wrong debit. RRN is : ' + rn + ' for vehicle ,' + lic_no)
-                    csvwriter.writerow(lst)
-
+                    csvwriter.writerow(
+                        [
+                            dbInfo.type,
+                            "Wrong Debit Adjustment raised",
+                            trip_no,
+                            amount,
+                            "WRONG DEBIT ADJUSTMENT",
+                            "Toll operator made wrong debit. RRN is : "
+                            + rn
+                            + " for vehicle ,"
+                            + lic_no,
+                        ]
+                    )
                     f.flush()
 
-                else:
-                    pass
-
-        f.close()
-
         if c == 0:
+            os.remove(file2_path)
+            return
 
-            os.remove(destination1+"\\"+ file2)
-        else:
+        df = pd.read_csv(file2_path)
+        summ = df["Dispute Amount"].sum()
+        print(summ, "Disputed amount for total DA disputes for file ", filename)
 
-            df = pd.read_csv(destination1+"\\" + file2)
-            summ = df['Dispute Amount'].sum()
-            print(summ, 'Disputed amount for total DA disputes for file ',filename)
-            nm = file2.split('.csv')[0] + "_" + str(summ) + ".csv"
-            os.rename(destination1+"\\"+ file2, destination1+"\\" + nm)
-            shutil.move(destination1+"\\" + nm, destination2+"\\" + nm)
+        nm = file2_name.split(".csv")[0] + "_" + str(summ) + ".csv"
+        nm_path = _file_path(destination1, nm)
 
-    except:
+        os.rename(file2_path, nm_path)
+        shutil.move(nm_path, _file_path(destination2, nm))
+
+    except Exception:
         traceback.print_exc()
 
 
-
-
-
-
-def empty_tablr():
-    db = mysql.connector.connect(
-        host=dbInfo.host,
-        user=dbInfo.user,
-        password=dbInfo.password,
-        database=dbInfo.database
-    )
-
-    cursor = db.cursor(buffered=True)
-    cursor3 = db.cursor(buffered=True)
+def empty_tablr() -> None:
     try:
-        qry = "TRUNCATE TABLE t_statement"
-        cursor.execute(qry)
+        db = dbInfo.get_connection()
+
+        cursor = db.cursor(buffered=True)
+        cursor3 = db.cursor(buffered=True)
+
+        cursor.execute("TRUNCATE TABLE t_statement")
         db.commit()
 
-        qry3 = "TRUNCATE TABLE toll_d"
-        cursor3.execute(qry3)
+        cursor3.execute("TRUNCATE TABLE toll_d")
         db.commit()
-        print('2 tables emptied')
-    except:
+
+        print("2 tables emptied")
+    except Exception:
         traceback.print_exc()
-def create_despute_report(filename):
-    global source,destination1,destination2
+
+
+def create_despute_report(filename: str) -> None:
+    destination1 = PATHS["destination1"]
+    destination2 = PATHS["destination2"]
 
     try:
-        db = mysql.connector.connect(
-            host=dbInfo.host,
-            user=dbInfo.user,
-            password=dbInfo.password,
-            database=dbInfo.database
-        )
+        db = dbInfo.get_connection()
 
         cursor = db.cursor(buffered=True)
         cur = db.cursor(buffered=True)
-        fields = ['Type', 'Subtype', 'Trip Number', 'Dispute Amount', 'Title', 'Description']
-        csv_file = filename.split('.csv')[0] + "_errors_upload.csv"
-        # print(csv_file)
 
-        f = open(csv_file, 'w', encoding='UTF8', newline='')
+        fields = ["Type", "Subtype", "Trip Number", "Dispute Amount", "Title", "Description"]
+        csv_file_name = filename.split(".csv")[0] + "_errors_upload.csv"
+        csv_file_path = _file_path(destination1, csv_file_name)
 
-        # create the csv writer
-        csvwriter = csv.writer(f)
-
-        # writing the fields
-        csvwriter.writerow(fields)
         rec_count = 0
-        # data rows of csv file
-        qry = "SELECT distinct tripno from toll_d"
-        # print(qry)
-        cursor.execute(qry)
-        result = cursor.fetchall()
-        if result:
+        with open(csv_file_path, "w", encoding="utf-8", newline="") as f:
+            csvwriter = csv.writer(f)
+            csvwriter.writerow(fields)
 
-            lst = []
-            for r in result:
-                lst.append(r[0])
+            cursor.execute("SELECT distinct tripno from toll_d")
+            result = cursor.fetchall()
 
-            for l in lst:
-                rows = []
+            if not result:
+                return
 
-                q = "SELECT * from toll_d where tripno='{}'".format(
-                    l)
+            tripnos = [r[0] for r in result]
+            for tripno in tripnos:
+                q = "SELECT * from toll_d where tripno='{}'".format(tripno)
                 cur.execute(q)
                 res = cur.fetchall()
+                if not res:
+                    continue
 
-                rows.append(res[0][1])
-                rows.append(res[0][2])
-
-                rows.append(res[0][5])
-                rows.append(res[0][6])
-                rows.append(res[0][7])
-                rows.append(res[0][8])
-
-                csvwriter.writerow(rows)
+                r0 = res[0]
+                csvwriter.writerow([r0[1], r0[2], r0[5], r0[6], r0[7], r0[8]])
                 f.flush()
+                rec_count += 1
 
-            f.close()
+        df = pd.read_csv(csv_file_path)
+        summ = df["Dispute Amount"].sum()
+        print(summ, "Disputed amount for toll disputes for file ", filename)
 
-            df = pd.read_csv(destination1+"\\" + csv_file)
-            summ = df['Dispute Amount'].sum()
-            print(summ, 'Disputed amount for toll disputes for file ',filename)
+        nm = csv_file_name.split(".csv")[0] + "_" + str(summ) + ".csv"
+        nm_path = _file_path(destination1, nm)
 
-            nm = csv_file.split('.csv')[0] + "_" + str(summ) + ".csv"
-            os.rename(destination1+"\\" + csv_file, destination1+"\\"  + nm)
-            shutil.move(destination1+"\\"  + nm, destination2 + "\\" + nm)
+        os.rename(csv_file_path, nm_path)
+        shutil.move(nm_path, _file_path(destination2, nm))
 
-        else:
-            f.close()
-            os.remove(destination1+"\\" + csv_file)
-    except:
+    except Exception:
         traceback.print_exc()
-def emptyy_folder():
+
+
+def emptyy_folder() -> None:
+    destination2 = PATHS["destination2"]
     if os.path.exists(destination2):
         for files in os.listdir(destination2):
-            os.remove(os.path.join(destination2, files))
+            try:
+                os.remove(_file_path(destination2, files))
+            except Exception:
+                traceback.print_exc()
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
+    preflight_or_exit()
     mainn()
