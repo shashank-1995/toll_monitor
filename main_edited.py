@@ -5,24 +5,20 @@ import traceback
 from datetime import datetime
 from bootstrap import preflight_or_exit
 from license_manager import validate_license_or_exit, get_device_id, LicenseError
+from config import CONFIG
 
 import pandas as pd
 
 import dbInfo
 from rough7 import paired_toll_error, dd_error, rj_error
 
-try:
-    # config.py must exist next to this script
-    from config import PATHS, CSV_ENCODING
-except Exception:
-    # Safe fallback so script still runs if config.py is missing
-    PATHS = {
-        "destination1": os.path.dirname(os.path.abspath(__file__)),
-        "destination2": os.path.join(os.path.dirname(os.path.abspath(__file__)), "Files2"),
-        "source": os.path.join(os.path.dirname(os.path.abspath(__file__)), "Files"),
-    }
-    CSV_ENCODING = "latin-1"
-    SUBSCRIPTION_EXPIRY = "01-12-2026 00:00:01"
+CSV_ENCODING = CONFIG.csv_encoding
+
+PATHS = {
+    "destination1": str(CONFIG.paths.base_dir),
+    "destination2": str(CONFIG.paths.output_dir),
+    "source": str(CONFIG.paths.input_dir),
+}
 
 
 def _ensure_dirs() -> None:
@@ -60,7 +56,6 @@ def mainn() -> None:
     empty_tablr()
     emptyy_folder()
     master()
-
 
 
 def master() -> None:
@@ -115,7 +110,8 @@ def uploadd_data(filename: str) -> None:
                 price = float(row[10].replace(",", ""))
 
                 if "Plaza Name:" in row[7]:
-                    plazaname = row[7].split("Plaza Name:")[1].split("- Lane")[0]
+                    plazaname = row[7].split("Plaza Name:")[
+                        1].split("- Lane")[0]
                 else:
                     plazaname = row[7].split("- Lane")[0]
 
@@ -160,7 +156,8 @@ def uploadd_data(filename: str) -> None:
                     db.rollback()
 
         db.commit()
-        print(f"Total Processed Data {process_count} and Total {count} data inserted successfully! ")
+        print(
+            f"Total Processed Data {process_count} and Total {count} data inserted successfully! ")
 
     except Exception:
         traceback.print_exc()
@@ -178,7 +175,8 @@ def Da_dispuutes(filename: str) -> None:
 
         cursor = db.cursor(buffered=True)
 
-        fields = ["Type", "Subtype", "Trip Number", "Dispute Amount", "Title", "Description"]
+        fields = ["Type", "Subtype", "Trip Number",
+                  "Dispute Amount", "Title", "Description"]
 
         file2_name = filename.split(".csv")[0] + "DA_Disp_5" + ".csv"
         file2_path = _file_path(destination1, file2_name)
@@ -202,7 +200,8 @@ def Da_dispuutes(filename: str) -> None:
                     amount = float(row[10].replace(",", ""))
                     rn = row[7].split("RRN ")[1].strip()
 
-                    sql = "SELECT trip_no, lic_no from t_statement where rrn like '{}'".format(rn)
+                    sql = "SELECT trip_no, lic_no from t_statement where rrn like '{}'".format(
+                        rn)
                     cursor.execute(sql)
                     res = cursor.fetchall()
 
@@ -273,7 +272,8 @@ def create_despute_report(filename: str) -> None:
         cursor = db.cursor(buffered=True)
         cur = db.cursor(buffered=True)
 
-        fields = ["Type", "Subtype", "Trip Number", "Dispute Amount", "Title", "Description"]
+        fields = ["Type", "Subtype", "Trip Number",
+                  "Dispute Amount", "Title", "Description"]
         csv_file_name = filename.split(".csv")[0] + "_errors_upload.csv"
         csv_file_path = _file_path(destination1, csv_file_name)
 
