@@ -133,12 +133,12 @@ def master() -> None:
             dd_error()
             LOGGER.info("Step: dd_error END (%s)", _fmt_seconds(time.perf_counter() - t3))
 
-            # t4 = time.perf_counter()
-            # LOGGER.info("Step: rj_error START")
-            # rj_error()
-            # LOGGER.info("Step: rj_error END (%s)", _fmt_seconds(time.perf_counter() - t4))
+            t4 = time.perf_counter()
+            LOGGER.info("Step: rj_error START")
+            rj_error()
+            LOGGER.info("Step: rj_error END (%s)", _fmt_seconds(time.perf_counter() - t4))
 
-            # create_despute_report(filename)
+            create_despute_report(filename)
 
             empty_tablr()
 
