@@ -24,7 +24,7 @@ jobs:
 
       - name: Build EXE (PyInstaller onedir)
         run: |
-          pyinstaller --noconfirm --clean --name toll_audit --onedir src/main_edited.py
+          pyinstaller --noconfirm --clean --name toll_audit --onedir main_edited.py
 
       - name: Install Inno Setup
         run: |
