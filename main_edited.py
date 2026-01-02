@@ -4,7 +4,7 @@ import shutil
 import traceback
 from datetime import datetime
 from bootstrap import preflight_or_exit
-from license_manager import validate_license_or_exit, get_device_id
+from license_manager import validate_license_or_exit, get_device_id, LicenseError
 
 import pandas as pd
 
@@ -36,17 +36,31 @@ def _file_path(*parts: str) -> str:
 
 
 def mainn() -> None:
+    logger = preflight_or_exit()
+
+    device_id = get_device_id()
+    logger.info("Device ID: %s", device_id)
+
     try:
-        validate_license_or_exit()
+        validate_license_or_exit(expected_device_id=device_id)
+    except LicenseError as e:
+        logger.exception("License error: %s", e)
+        print("License error:", str(e))
+        print("Your Device ID:", device_id)
+        raise SystemExit(1)
     except SystemExit as e:
+        # Covers expired or device mismatch cases (your validate_license_or_exit uses SystemExit)
+        logger.exception("License validation failed: %s", e)
         print(str(e))
-        print("Your Device ID:", get_device_id())
+        print("Your Device ID:", device_id)
         raise
+
     _ensure_dirs()
     print("There will be 1 or 2 disputes files in the output folder")
     empty_tablr()
     emptyy_folder()
     master()
+
 
 
 def master() -> None:
@@ -312,5 +326,4 @@ def emptyy_folder() -> None:
 
 
 if __name__ == "__main__":
-    preflight_or_exit()
     mainn()
