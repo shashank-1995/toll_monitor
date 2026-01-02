@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import sys
 from pathlib import Path
 import os
 
@@ -35,7 +36,14 @@ def _env_path(name: str, default: Path) -> Path:
     return Path(val).expanduser().resolve() if val else default
 
 
-BASE_DIR = Path(__file__).resolve().parent
+def _runtime_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+BASE_DIR = _runtime_base_dir()
+
 
 PATHS = Paths(
     base_dir=BASE_DIR,
@@ -60,6 +68,8 @@ CONFIG = AppConfig(
         "TOLL_AUDIT_CONSTANTS_URL",
         "https://gist.githubusercontent.com/shashank-1995/677ef5618d7913107d57c90115fea667/raw/c40e9ca9af60a1aa21fbe05dc5350718bbad8cd2/constants.json",
     ),
-    constants_cache_path=_env_path("TOLL_AUDIT_CONSTANTS_CACHE", PATHS.work_dir / "constants_cache.json"),
-    license_path=_env_path("TOLL_AUDIT_LICENSE_PATH", BASE_DIR / "license.json"),
+    constants_cache_path=_env_path(
+        "TOLL_AUDIT_CONSTANTS_CACHE", PATHS.work_dir / "constants_cache.json"),
+    license_path=_env_path("TOLL_AUDIT_LICENSE_PATH",
+                           BASE_DIR / "license.json"),
 )

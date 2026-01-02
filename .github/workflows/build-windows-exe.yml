@@ -1,20 +1,20 @@
-name: Build Windows EXE
+name: Build Windows Installer
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
@@ -22,13 +22,20 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build EXE with PyInstaller
+      - name: Build EXE (PyInstaller onedir)
         run: |
-          pyinstaller --onefile main_edited.py --name toll_audit
+          pyinstaller --noconfirm --clean --name toll_audit --onedir src/main_edited.py
 
-      - name: Upload EXE as artifact
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Build Installer (Inno Setup)
+        run: |
+          iscc installer/toll_audit.iss
+
+      - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: toll_audit_windows
-          path: dist/toll_audit.exe
-
+          name: TollAuditInstaller
+          path: installer/output/TollAuditInstaller.exe
