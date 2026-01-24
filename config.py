@@ -54,9 +54,9 @@ PATHS = Paths(
 
 DB = DbConfig(
     host=os.getenv("TOLL_AUDIT_DB_HOST", "127.0.0.1"),
-    user=os.getenv("TOLL_AUDIT_DB_USER", "toll_user"),
-    password=os.getenv("TOLL_AUDIT_DB_PASSWORD", "toll_pass"),
-    database=os.getenv("TOLL_AUDIT_DB_NAME", "test"),
+    user=os.getenv("TOLL_AUDIT_DB_USER", "root"),
+    password=os.getenv("TOLL_AUDIT_DB_PASSWORD", ""),
+    database=os.getenv("TOLL_AUDIT_DB_NAME", "tst"),
     port=int(os.getenv("TOLL_AUDIT_DB_PORT", "3306")),
 )
 
