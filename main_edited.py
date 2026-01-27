@@ -96,7 +96,7 @@ def master() -> None:
 
     if len(lstt) == 0:
         print("No file is there to be processed. Plz add the files")
-        LOGGER.warning("No files found in input directory; exiting.")
+        LOGGER.warning("No file found in input directory; exiting.")
         raise SystemExit(0)
 
     for filename in lstt:
@@ -462,3 +462,4 @@ def emptyy_folder() -> None:
 
 if __name__ == "__main__":
     mainn()
+
