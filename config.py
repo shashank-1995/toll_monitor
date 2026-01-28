@@ -66,7 +66,7 @@ CONFIG = AppConfig(
     csv_encoding=os.getenv("TOLL_AUDIT_CSV_ENCODING", "latin-1"),
     constants_url=os.getenv(
         "TOLL_AUDIT_CONSTANTS_URL",
-        "https://gist.githubusercontent.com/shashank-1995/677ef5618d7913107d57c90115fea667/raw/c40e9ca9af60a1aa21fbe05dc5350718bbad8cd2/constants.json",
+        "https://gist.githubusercontent.com/accnt4fleet-git/d5d1dbf21442727cabc08d65357f16b1/raw/51b0f1c1bba828cd3864419c539dac3ffb4e3a7a/constants.json",
     ),
     constants_cache_path=_env_path(
         "TOLL_AUDIT_CONSTANTS_CACHE", PATHS.work_dir / "constants_cache.json"),
